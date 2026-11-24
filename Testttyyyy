@@ -619,7 +619,7 @@ local function img(parent, p)
 	return i
 end
 
--- MacLib-style acrylic background blur helper anchored to a frame
+-- MacLib Acrylic Glass Blur Engine
 local function attachMacAcrylicBlur(targetFrame, isEnabledFn, isUnloadedFn)
 	local MTREL = "Glass"
 	local wedgeguid = HttpService:GenerateGUID(true)
@@ -825,6 +825,10 @@ local function attachMacAcrylicBlur(targetFrame, isEnabledFn, isUnloadedFn)
 	blurProbe.Destroying:Connect(cleanup)
 	return cleanup
 end
+
+-- =========================================================================
+-- VantixUI Controls (Unchanged)
+-- =========================================================================
 
 local function makeToggle(parent, initialState, guard)
 	local state = initialState or false
@@ -1736,7 +1740,7 @@ function VantixUI:GetAccentColor()
 	return K.white
 end
 
-local function resolveMacWindowSize(config, vp, mobile)
+local function resolveMacWindowSize(config, vp)
 	if typeof(config.Size) == "UDim2" then
 		local sx = config.Size.X.Scale * vp.X + config.Size.X.Offset
 		local sy = config.Size.Y.Scale * vp.Y + config.Size.Y.Offset
@@ -1746,13 +1750,12 @@ local function resolveMacWindowSize(config, vp, mobile)
 	elseif typeof(config.Size) == "Vector2" then
 		return math.clamp(config.Size.X, 200, vp.X - 20), math.clamp(config.Size.Y, 200, vp.Y - 40)
 	end
-
-	-- MacLib default outer frame size (868x650), clamped safely to viewport
-	if mobile then
-		return math.min(vp.X - 20, 868), math.min(vp.Y - 40, 650)
-	end
 	return math.min(vp.X - 20, 868), math.min(vp.Y - 40, 650)
 end
+
+-- =========================================================================
+-- MacLib UI Window Frame (Authentic macOS / MacLib Frame & Layout)
+-- =========================================================================
 
 function VantixUI:CreateWindow(config)
 	config = config or {}
@@ -1778,9 +1781,10 @@ function VantixUI:CreateWindow(config)
 
 	local MOBILE = isMobile()
 	local vp = camera.ViewportSize
-	local WIN_W, WIN_H = resolveMacWindowSize(config, vp, MOBILE)
+	local WIN_W, WIN_H = resolveMacWindowSize(config, vp)
 	local SIDE_W = math.clamp(math.floor(WIN_W * 0.325), 107, 260)
-	local TITLE  = config.Title or "Vantix"
+	local TITLE  = config.Title or "MacLib"
+	local SUBTITLE = config.Subtitle or ""
 	local LOGO   = (config.Logo or config.LogoID) and tostring(config.Logo or config.LogoID) or LOGO_ASSET
 
 	local guiParent = CoreGui
@@ -1845,9 +1849,9 @@ function VantixUI:CreateWindow(config)
 		pcall(function() RunService:UnbindFromRenderStep("VantixUICursorFree") end)
 	end)
 
-	-- MacLib-style outer frame & background
+	-- MacLib Base Frame (868x650, CornerRadius 10, Color 15,15,15, Stroke 255,255,255 @ 0.9)
 	local win = frame(sg,{
-		name="Win", colorKey="bg",
+		name="Base", colorKey="bg",
 		trans = acrylicEnabled and 0.05 or 0,
 		size=UDim2.new(0,WIN_W,0,0),
 		pos=UDim2.new(0.5,0,0.5,0), anchor=Vector2.new(0.5,0.5),
@@ -1857,8 +1861,8 @@ function VantixUI:CreateWindow(config)
 		win.BackgroundTransparency = acrylicEnabled and 0.05 or 0
 	end, win)
 
-	local macFrameStroke = inst("UIStroke", {
-		Name = "MacFrameStroke",
+	local macBaseStroke = inst("UIStroke", {
+		Name = "BaseStroke",
 		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
 		Color = Color3.fromRGB(255, 255, 255),
 		Transparency = 0.9,
@@ -1872,70 +1876,42 @@ function VantixUI:CreateWindow(config)
 		function() return tornDown end
 	)
 
-	local outerGlow = frame(win,{
-		name="OuterGlow", colorKey="white", trans=0.93,
-		size=UDim2.new(1,10,1,10), pos=UDim2.new(0,-5,0,-5),
-		z=1,
-	})
-	rnd(outerGlow, 14)
+	-- MacLib Subtle Drop-Shadow Frame
+	local macShadow = inst("ImageLabel", {
+		Name = "MacShadow",
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0.5, 0, 0.5, 4),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.new(1, 34, 1, 34),
+		ZIndex = 1,
+		Image = "rbxassetid://6015897843",
+		ImageColor3 = Color3.new(0, 0, 0),
+		ImageTransparency = 0.45,
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = Rect.new(49, 49, 450, 450),
+	}, win)
 
 	local minWinW, minWinH = math.min(WIN_W, 420), math.min(WIN_H, 320)
 	local maxWinW, maxWinH = 1100, 820
 	local userResized, introTween = false, nil
 
+	-- Bottom-right MacLib corner resize grip
 	local resizeHandle = frame(win,{
 		name="ResizeHandle", colorKey="white", trans=1,
-		size=UDim2.new(0,26,0,26),
-		pos=UDim2.new(1, -5, 1, -5), anchor=Vector2.new(0,0),
+		size=UDim2.new(0,22,0,22),
+		pos=UDim2.new(1, -4, 1, -4), anchor=Vector2.new(1,1),
 		z=20, clip=true,
 	})
-	local resizeCurve = frame(resizeHandle,{
-		name="Curve", colorKey="bg", trans=1,
-		size=UDim2.new(0,36,0,36), pos=UDim2.new(0,-18,0,-18), z=20,
+	local resizeGrip = frame(resizeHandle,{
+		name="Grip", color=Color3.fromRGB(255,255,255), trans=0.82,
+		size=UDim2.new(0,10,0,10), pos=UDim2.new(1,-2,1,-2), anchor=Vector2.new(1,1), z=20,
 	})
-	rnd(resizeCurve, 99)
-	local resizeStrk = inst("UIStroke", {Color=K.white, Thickness=3, Transparency=0.62}, resizeCurve)
-	registerThemeUpdater(function()
-		resizeStrk.Color = K.white
-	end, resizeStrk)
-
-	local grabLine = frame(win,{
-		name="GrabLine", colorKey="white", trans=0.62,
-		size=UDim2.new(0.4, 0, 0, 3),
-		pos=UDim2.new(0.5, 0, 1, 10), anchor=Vector2.new(0.5, 0), z=20,
-	})
-	rnd(grabLine, 99)
-
-	local grabHandle = inst("TextButton",{
-		Name="GrabHandle", BackgroundTransparency=1, Text="", AutoButtonColor=false,
-		Size=UDim2.new(0.4, 24, 0, 22), Position=UDim2.new(0.5, 0, 1, 2), AnchorPoint=Vector2.new(0.5, 0), ZIndex=21,
-	}, win)
-	do
-		local gDrag, gds, gws
-		grabHandle.MouseEnter:Connect(function() tw(grabLine,{BackgroundTransparency=0.25},0.12):Play() end)
-		grabHandle.MouseLeave:Connect(function() if not gDrag then tw(grabLine,{BackgroundTransparency=0.62},0.12):Play() end end)
-		grabHandle.InputBegan:Connect(function(inp)
-			if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then
-				gDrag=true; gds=inp.Position; gws=win.Position
-			end
-		end)
-		bind(UIS.InputChanged, function(inp)
-			if gDrag and (inp.UserInputType==Enum.UserInputType.MouseMovement or inp.UserInputType==Enum.UserInputType.Touch) then
-				local d=inp.Position-gds
-				win.Position=UDim2.new(gws.X.Scale,gws.X.Offset+d.X,gws.Y.Scale,gws.Y.Offset+d.Y)
-			end
-		end)
-		bind(UIS.InputEnded, function(inp)
-			if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then
-				gDrag=false; tw(grabLine,{BackgroundTransparency=0.62},0.12):Play()
-			end
-		end)
-	end
+	rnd(resizeGrip, 3)
 
 	local resizeBtn = inst("TextButton",{
 		BackgroundTransparency=1, Text="",
-		Size=UDim2.new(0,44,0,44),
-		Position=UDim2.new(1, 10, 1, 10), AnchorPoint=Vector2.new(0.5,0.5),
+		Size=UDim2.new(0,32,0,32),
+		Position=UDim2.new(1, 0, 1, 0), AnchorPoint=Vector2.new(1,1),
 		ZIndex=25, AutoButtonColor=false,
 	}, win)
 
@@ -1975,13 +1951,14 @@ function VantixUI:CreateWindow(config)
 		end)
 
 		resizeBtn.MouseEnter:Connect(function()
-			tw(resizeStrk, {Transparency=0.2}, 0.1):Play()
+			tw(resizeGrip, {BackgroundTransparency=0.45}, 0.1):Play()
 		end)
 		resizeBtn.MouseLeave:Connect(function()
-			tw(resizeStrk, {Transparency=0.62}, 0.1):Play()
+			tw(resizeGrip, {BackgroundTransparency=0.82}, 0.1):Play()
 		end)
 	end
 
+	-- MacLib Loading Splash Overlay
 	local loadLayer = frame(win,{name="Load", colorKey="bg", z=30, clip=true})
 	rnd(loadLayer, 10)
 
@@ -2030,81 +2007,128 @@ function VantixUI:CreateWindow(config)
 		}),
 	},shimF)
 
-	local body
+	-- =====================================================================
+	-- MacLib Sidebar + Topbar Structure
+	-- In MacLib:
+	--   Left Sidebar spans the full height (0 to 1) with traffic lights at top-left,
+	--   Title & Subtitle beneath traffic lights, tab list in middle, and user profile at bottom.
+	--   Right Main area has a Topbar (with active tab title + tags) and Content container below.
+	-- =====================================================================
 
-	local titlebar = frame(win,{
-		name="Titlebar", colorKey="bg", trans=1,
-		size=UDim2.new(1,0,0,38), z=5,
+	local TOPBAR_H = 54
+
+	local sidebar = frame(win,{
+		name="Sidebar", colorKey="bg", trans=1,
+		size=UDim2.new(0,SIDE_W,1,0), pos=UDim2.new(0,0,0,0), z=5,
 	})
-	rnd(titlebar, 10)
-	titlebar.Visible = false
+	rnd(sidebar, 10)
+	sidebar.Visible = false
 
-	frame(titlebar,{
-		name="Div", colorKey="border",
-		size=UDim2.new(1,0,0,1), pos=UDim2.new(0,0,1,-1), z=6,
+	-- MacLib vertical divider between Sidebar and Main Content
+	local sidebarDivider = frame(win,{
+		name="SidebarDivider",
+		color=Color3.fromRGB(255, 255, 255),
+		trans=0.92,
+		size=UDim2.new(0,1,1,0),
+		pos=UDim2.new(0,SIDE_W,0,0),
+		z=15,
+	})
+	sidebarDivider.Visible = false
+
+	-- MacLib Top-Left Header inside Sidebar (Traffic Lights + Title/Subtitle)
+	local sideTop = frame(sidebar,{
+		name="SideTop", trans=1,
+		size=UDim2.new(1,0,0,76), pos=UDim2.new(0,0,0,0), z=6,
 	})
 
-	local titleLbl = lbl(titlebar,{
-		text=TITLE, font=Enum.Font.BuilderSansBold, size=16, colorKey="white",
-		sz=UDim2.new(0,200,1,0), pos=UDim2.new(0,16,0,0), z=6,
-	})
-	titleLbl.TextTruncate = Enum.TextTruncate.AtEnd
-
-	local tagContainer = frame(titlebar,{
-		name="TagContainer", colorKey="bg", trans=1,
-		size=UDim2.new(0,300,1,0),
-		pos=UDim2.new(0, SIDE_W + 16, 0, 0), z=6,
+	-- macOS Traffic Lights (Close Red, Minimize Yellow, Maximize/Acrylic Green)
+	local trafficFrame = frame(sideTop,{
+		name="TrafficLights", trans=1,
+		size=UDim2.new(0,68,0,16),
+		pos=UDim2.new(0,16,0,14), z=7,
 	})
 	inst("UIListLayout",{
 		FillDirection=Enum.FillDirection.Horizontal,
 		SortOrder=Enum.SortOrder.LayoutOrder,
 		VerticalAlignment=Enum.VerticalAlignment.Center,
 		Padding=UDim.new(0,8),
-	},tagContainer)
+	}, trafficFrame)
 
-	local ctrlFrame = frame(titlebar,{
-		name="Controls", colorKey="bg", trans=1,
-		size=UDim2.new(0,80,0,32),
-		pos=UDim2.new(1,-10,0.5,0), anchor=Vector2.new(1,0.5), z=6,
+	local function makeTrafficDot(name, col, hoverGlyph, orderIdx)
+		local dot = btn(trafficFrame,{
+			name=name, color=col, text="",
+			sz=UDim2.new(0,12,0,12), z=8,
+		})
+		dot.LayoutOrder = orderIdx
+		rnd(dot, 99)
+		local glyph = lbl(dot,{
+			text=hoverGlyph, font=Enum.Font.BuilderSansBold, size=9,
+			color=Color3.fromRGB(40, 15, 15), trans=1,
+			sz=UDim2.fromScale(1,1), xa=Enum.TextXAlignment.Center, ya=Enum.TextYAlignment.Center, z=9,
+		})
+		dot.MouseEnter:Connect(function()
+			tw(glyph,{TextTransparency=0.15},0.1):Play()
+		end)
+		dot.MouseLeave:Connect(function()
+			tw(glyph,{TextTransparency=1},0.1):Play()
+		end)
+		return dot
+	end
+
+	local closeBtn    = makeTrafficDot("CloseDot",    Color3.fromRGB(255, 95,  86),  "×", 1)
+	local minBtn      = makeTrafficDot("MinDot",      Color3.fromRGB(255, 189, 46),  "–", 2)
+	local maximizeBtn = makeTrafficDot("MaxDot",      Color3.fromRGB(39,  201, 63),  "+", 3)
+
+	-- MacLib Sidebar App Title & Subtitle
+	local titleLbl = lbl(sideTop,{
+		text=TITLE, font=Enum.Font.BuilderSansBold, size=16, colorKey="text",
+		sz=UDim2.new(1,-32,0,20), pos=UDim2.new(0,16,0,36), z=7,
+	})
+	titleLbl.TextTruncate = Enum.TextTruncate.AtEnd
+
+	local subTitleLbl = lbl(sideTop,{
+		text=SUBTITLE ~= "" and SUBTITLE or "MacLib Interface",
+		font=Enum.Font.BuilderSans, size=12, colorKey="muted",
+		sz=UDim2.new(1,-32,0,15), pos=UDim2.new(0,16,0,56), z=7,
+	})
+	subTitleLbl.TextTruncate = Enum.TextTruncate.AtEnd
+
+	-- MacLib Topbar (Right side top header showing active Tab name + Tags)
+	local titlebar = frame(win,{
+		name="MacTopbar", colorKey="bg", trans=1,
+		size=UDim2.new(1,-SIDE_W,0,TOPBAR_H), pos=UDim2.new(0,SIDE_W,0,0), z=5,
+	})
+	titlebar.Visible = false
+
+	-- MacLib Horizontal Divider under Topbar
+	frame(titlebar,{
+		name="TopbarDiv",
+		color=Color3.fromRGB(255, 255, 255),
+		trans=0.92,
+		size=UDim2.new(1,0,0,1), pos=UDim2.new(0,0,1,-1), z=6,
+	})
+
+	local activeTabTitleLbl = lbl(titlebar,{
+		name="ActiveTabTitle",
+		text="", font=Enum.Font.BuilderSansBold, size=17, colorKey="text",
+		sz=UDim2.new(0,220,1,0), pos=UDim2.new(0,20,0,0), z=6,
+	})
+	activeTabTitleLbl.TextTruncate = Enum.TextTruncate.AtEnd
+
+	local tagContainer = frame(titlebar,{
+		name="TagContainer", colorKey="bg", trans=1,
+		size=UDim2.new(1,-240,1,0),
+		pos=UDim2.new(1,-16,0,0), anchor=Vector2.new(1,0), z=6,
 	})
 	inst("UIListLayout",{
 		FillDirection=Enum.FillDirection.Horizontal,
-		SortOrder=Enum.SortOrder.LayoutOrder,
 		HorizontalAlignment=Enum.HorizontalAlignment.Right,
+		SortOrder=Enum.SortOrder.LayoutOrder,
 		VerticalAlignment=Enum.VerticalAlignment.Center,
-		Padding=UDim.new(0,6),
-	},ctrlFrame)
+		Padding=UDim.new(0,8),
+	},tagContainer)
 
-	local function makeCtrlBtn(iconName, name, isClose)
-		local b = btn(ctrlFrame, {
-			name=name, colorKey="raised", trans=1,
-			sz=UDim2.new(0,30,0,30), z=7,
-		})
-		rnd(b, 6)
-		b:SetAttribute("colorKey", "raised")
-		b:SetAttribute("tcKey", "text")
-		local ic = img(b,{
-			name="Icon", img=getLucide(iconName, 18),
-			colorKey="sub", sz=UDim2.new(0,19,0,19), pos=UDim2.new(0.5,0,0.5,0), anchor=Vector2.new(0.5,0.5), z=8
-		})
-		b.MouseEnter:Connect(function()
-			b:SetAttribute("Hovered", true)
-			tw(b,{BackgroundTransparency=0, BackgroundColor3=isClose and Color3.fromRGB(220,60,60) or K.border},0.1):Play()
-			tw(ic,{ImageColor3=K.white},0.1):Play()
-		end)
-		b.MouseLeave:Connect(function()
-			b:SetAttribute("Hovered", false)
-			tw(b,{BackgroundTransparency=1, BackgroundColor3=K.raised},0.1):Play()
-			tw(ic,{ImageColor3=K.sub},0.1):Play()
-		end)
-		return b
-	end
-
-	local closeBtn = makeCtrlBtn("x","Close", true)
-	local minBtn   = makeCtrlBtn("minus","Minimize", false)
-	minBtn.LayoutOrder   = 1
-	closeBtn.LayoutOrder = 2
-
+	-- Close & Minimize handlers
 	closeBtn.MouseButton1Click:Connect(function()
 		if win:GetAttribute("Closing") then return end
 		win:SetAttribute("Closing", true)
@@ -2118,7 +2142,7 @@ function VantixUI:CreateWindow(config)
 		t:Play()
 
 		pcall(function()
-			tw(outerGlow, {BackgroundTransparency = 1}, 0.15):Play()
+			tw(macShadow, {ImageTransparency = 1}, 0.15):Play()
 		end)
 
 		task.delay(0.25, function()
@@ -2126,6 +2150,17 @@ function VantixUI:CreateWindow(config)
 		end)
 	end)
 
+	-- Green traffic dot toggles expanded MacLib size vs default size
+	local isExpandedSize = false
+	maximizeBtn.MouseButton1Click:Connect(function()
+		if userResized then userResized = false end
+		isExpandedSize = not isExpandedSize
+		local targetW = isExpandedSize and math.min(vp.X - 40, 1020) or WIN_W
+		local targetH = isExpandedSize and math.min(vp.Y - 60, 760) or WIN_H
+		tw(win, {Size = UDim2.new(0, targetW, 0, targetH)}, 0.26, Enum.EasingStyle.Quint):Play()
+	end)
+
+	-- Minimized pill overlay
 	local pillText = "Open " .. TITLE
 	local pillTextX = lucide and 33 or 10
 	local pillTextPad = 14
@@ -2229,7 +2264,7 @@ function VantixUI:CreateWindow(config)
 		resizeBtn.Visible = false
 		resizeHandle.Visible = false
 		win.ClipsDescendants = true
-		tw(outerGlow, {BackgroundTransparency=1}, 0.1):Play()
+		tw(macShadow, {ImageTransparency=1}, 0.1):Play()
 		local curSize = win.Size
 		win:SetAttribute("RestoreSizeX", curSize.X.Offset)
 		win:SetAttribute("RestoreSizeY", curSize.Y.Offset)
@@ -2279,7 +2314,7 @@ function VantixUI:CreateWindow(config)
 			}, 0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
 			tr.Completed:Connect(function()
 				win.ClipsDescendants = false
-				tw(outerGlow, {BackgroundTransparency=0.93}, 0.15):Play()
+				tw(macShadow, {ImageTransparency=0.45}, 0.15):Play()
 				minimized = false
 				animating = false
 			end)
@@ -2305,13 +2340,19 @@ function VantixUI:CreateWindow(config)
 		end
 	end)
 
-	local dragging,ds,ws
-	titlebar.InputBegan:Connect(function(inp)
-		if inp.UserInputType==Enum.UserInputType.MouseButton1
-		or inp.UserInputType==Enum.UserInputType.Touch then
-			dragging=true; ds=inp.Position; ws=win.Position
-		end
-	end)
+	-- Dragging from both MacTopbar and Sidebar top header (like MacLib)
+	local dragging, ds, ws
+	local function attachDrag(dragSurface)
+		dragSurface.InputBegan:Connect(function(inp)
+			if inp.UserInputType==Enum.UserInputType.MouseButton1
+			or inp.UserInputType==Enum.UserInputType.Touch then
+				dragging=true; ds=inp.Position; ws=win.Position
+			end
+		end)
+	end
+	attachDrag(titlebar)
+	attachDrag(sideTop)
+
 	bind(UIS.InputChanged, function(inp)
 		if dragging and (inp.UserInputType==Enum.UserInputType.MouseMovement
 			or inp.UserInputType==Enum.UserInputType.Touch) then
@@ -2324,24 +2365,15 @@ function VantixUI:CreateWindow(config)
 		or inp.UserInputType==Enum.UserInputType.Touch then dragging=false end
 	end)
 
-	local followBar = frame(win,{
-		name="FollowBar", colorKey="white", trans=0.6,
-		size=UDim2.new(0,50,0,4),
-		pos=UDim2.new(0.5,0,1,10), anchor=Vector2.new(0.5,0),
-		z=3,
+	-- MacLib Right Content Area (below MacTopbar)
+	local contentArea = frame(win,{
+		name="ContentArea", colorKey="surface", trans=1,
+		size=UDim2.new(1,-SIDE_W,1,-TOPBAR_H), pos=UDim2.new(0,SIDE_W,0,TOPBAR_H),
+		clip=true, z=5,
 	})
-	rnd(followBar, 99)
-	followBar.Visible = false
+	rnd(contentArea, 10)
+	contentArea.Visible = false
 
-	body = frame(win,{
-		name="Body", colorKey="bg", trans=1,
-		size=UDim2.new(1,0,1,-38), pos=UDim2.new(0,0,0,38),
-		z=4, clip=true,
-	})
-	rnd(body, 10)
-	body.Visible=false
-
-	local sidebar
 	local sidebarScroll
 	local navBtns = {}
 	local tabs = {}
@@ -2350,6 +2382,7 @@ function VantixUI:CreateWindow(config)
 
 	local function setNav(page)
 		activePage = page
+		activeTabTitleLbl.Text = page
 		for _, closer in ipairs(allDropdownClosers) do pcall(closer) end
 		for name, nb in pairs(navBtns) do
 			local active = (name == page)
@@ -2362,7 +2395,7 @@ function VantixUI:CreateWindow(config)
 				tw(nb.icon,{ImageColor3=active and K.white or K.sub},0.15):Play()
 			end
 			if nb.bg then
-				tw(nb.bg,{BackgroundTransparency=active and 0.94 or 1},0.15):Play()
+				tw(nb.bg,{BackgroundTransparency=active and 0.92 or 1},0.15):Play()
 			end
 		end
 		for name, tab in pairs(tabs) do
@@ -2371,20 +2404,13 @@ function VantixUI:CreateWindow(config)
 	end
 
 	do
-		sidebar = frame(body,{
-			name="Sidebar", colorKey="bg", trans=1,
-			size=UDim2.new(0,SIDE_W,1,0), z=5,
-		})
-		rnd(sidebar, 10)
-		frame(win,{
-			name="SidebarSep",colorKey="border",
-			size=UDim2.new(0,1,1,0),pos=UDim2.new(0,SIDE_W-1,0,0),z=15,
-		})
-
-		local profileH = 68
+		local profileH = 64
+		local topHeaderH = 78
 
 		sidebarScroll = inst("ScrollingFrame", {
-			Name="SidebarScroll", Size=UDim2.new(1,0,1,-profileH), Position=UDim2.new(0,0,0,0),
+			Name="SidebarScroll",
+			Size=UDim2.new(1,0,1,-(topHeaderH + profileH)),
+			Position=UDim2.new(0,0,0,topHeaderH),
 			BackgroundTransparency=1, BorderSizePixel=0,
 			ScrollBarThickness=0,
 			ScrollingDirection=Enum.ScrollingDirection.Y,
@@ -2397,25 +2423,28 @@ function VantixUI:CreateWindow(config)
 			SortOrder=Enum.SortOrder.LayoutOrder,
 			Padding=UDim.new(0,4),
 		}, sidebarScroll)
-		pad(sidebarScroll, 6, 6, 8, 8)
+		pad(sidebarScroll, 10, 10, 4, 8)
 
+		-- MacLib Bottom-Left User Profile Card
 		local profileSection = frame(sidebar,{
 			name="Profile", colorKey="bg", trans=1,
-			size=UDim2.new(1,-1,0,profileH),
+			size=UDim2.new(1,0,0,profileH),
 			pos=UDim2.new(0,0,1,0), anchor=Vector2.new(0,1),
 			z=6,
 		})
 
 		frame(profileSection,{
-			name="PSep", colorKey="border",
-			size=UDim2.new(1,-16,0,1), pos=UDim2.new(0,8,0,0), z=7,
+			name="PSep",
+			color=Color3.fromRGB(255,255,255),
+			trans=0.92,
+			size=UDim2.new(1,-24,0,1), pos=UDim2.new(0,12,0,0), z=7,
 		})
 
-		local AVA = 46
+		local AVA = 38
 		local avatarHolder = frame(profileSection,{
 			name="Avatar", colorKey="raised",
 			size=UDim2.new(0,AVA,0,AVA),
-			pos=UDim2.new(0,8,0.5,0), anchor=Vector2.new(0,0.5),
+			pos=UDim2.new(0,14,0.5,0), anchor=Vector2.new(0,0.5),
 			z=7,
 		})
 		rnd(avatarHolder,99)
@@ -2428,20 +2457,20 @@ function VantixUI:CreateWindow(config)
 		}, avatarHolder)
 		rnd(avatarImg,99)
 
-		local txtX = AVA + 16
+		local txtX = AVA + 24
 		local nameLbl = lbl(profileSection,{
 			text=player.DisplayName,
-			font=Enum.Font.BuilderSansBold, size=15, colorKey="text",
-			sz=UDim2.new(1,-txtX-4,0,18),
-			pos=UDim2.new(0,txtX,0.5,-15), z=7,
+			font=Enum.Font.BuilderSansBold, size=14, colorKey="text",
+			sz=UDim2.new(1,-txtX-8,0,17),
+			pos=UDim2.new(0,txtX,0.5,-13), z=7,
 		})
 		nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
 
 		local execLbl = lbl(profileSection,{
 			text="",
-			font=Enum.Font.BuilderSansMedium, size=13, colorKey="muted",
-			sz=UDim2.new(1,-txtX-4,0,15),
-			pos=UDim2.new(0,txtX,0.5,5), z=7,
+			font=Enum.Font.BuilderSansMedium, size=12, colorKey="muted",
+			sz=UDim2.new(1,-txtX-8,0,14),
+			pos=UDim2.new(0,txtX,0.5,4), z=7,
 		})
 		execLbl.TextTruncate = Enum.TextTruncate.AtEnd
 
@@ -2467,14 +2496,6 @@ function VantixUI:CreateWindow(config)
 		end)
 	end
 
-	local contentX = SIDE_W
-	local contentArea = frame(body,{
-		name="ContentArea", colorKey="surface", trans=1,
-		size=UDim2.new(1,-contentX,1,0), pos=UDim2.new(0,contentX,0,0),
-		clip=true, z=5,
-	})
-	rnd(contentArea, 10)
-
 	do
 		local BG_H = MOBILE and 150 or 220
 		local BG_W = MOBILE and 470 or 680
@@ -2490,7 +2511,7 @@ function VantixUI:CreateWindow(config)
 		})
 		local bgImg = inst("ImageLabel",{
 			Name="BgMark", BackgroundTransparency=1,
-			Image=assetImage(LOGO), ImageColor3=K.white, ImageTransparency=0.88,
+			Image=assetImage(LOGO), ImageColor3=K.white, ImageTransparency=0.92,
 			ScaleType=Enum.ScaleType.Fit,
 			Size=UDim2.fromScale(1,1), Position=UDim2.fromScale(0.5,0.5), AnchorPoint=Vector2.new(0.5,0.5),
 			ZIndex=1,
@@ -2506,7 +2527,7 @@ function VantixUI:CreateWindow(config)
 		end, bgImg)
 
 		local bgScale = inst("UIScale",{Scale=1}, bgWrap)
-		local _baseContentW = WIN_W - contentX
+		local _baseContentW = WIN_W - SIDE_W
 		contentArea:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 			bgScale.Scale = math.max(1, contentArea.AbsoluteSize.X / _baseContentW)
 		end)
@@ -2949,20 +2970,9 @@ function VantixUI:CreateWindow(config)
 		})
 		tabContent.Visible = false
 
-		local pageHdr = lbl(tabContent,{
-			name="PageHdr", text=tabName,
-			font=Enum.Font.BuilderSansBold, size=MOBILE and 18 or 16, colorKey="white",
-			sz=UDim2.new(1,-24,0,20), pos=UDim2.new(0,18,0,14), z=6,
-		})
-
-		frame(tabContent,{
-			name="HDiv",colorKey="border",
-			size=UDim2.new(1,-20,0,1),pos=UDim2.new(0,10,0,40),z=6,
-		})
-
 		local scroll = inst("ScrollingFrame",{
 			Name="Scroll",
-			Size=UDim2.new(1,0,1,-46), Position=UDim2.new(0,0,0,46),
+			Size=UDim2.fromScale(1,1), Position=UDim2.fromScale(0,0),
 			BackgroundTransparency=1, BorderSizePixel=0,
 			ScrollBarThickness=2, ScrollBarImageColor3=K.border,
 			ScrollingDirection=Enum.ScrollingDirection.Y,
@@ -2973,7 +2983,7 @@ function VantixUI:CreateWindow(config)
 		registerThemeUpdater(function()
 			scroll.ScrollBarImageColor3 = K.border
 		end, scroll)
-		pad(scroll,18,18,10,18)
+		pad(scroll,20,20,16,20)
 
 		inst("UIListLayout",{
 			FillDirection=Enum.FillDirection.Vertical,
@@ -2987,7 +2997,7 @@ function VantixUI:CreateWindow(config)
 				size=UDim2.new(1,0,0,36), z=6,
 			})
 			nb.LayoutOrder = tabCount
-			rnd(nb,6)
+			rnd(nb,8)
 
 			local accent=frame(nb,{
 				name="Accent",colorKey="white",trans=1,
@@ -2996,8 +3006,8 @@ function VantixUI:CreateWindow(config)
 			rnd(accent,99)
 
 			local nl=lbl(nb,{
-				text=tabName,font=Enum.Font.BuilderSansMedium,size=SIDE_W < 140 and 12 or 15,colorKey="sub",
-				sz=UDim2.new(1,0,1,0),pos=UDim2.new(0,(iconName and lucide) and (SIDE_W < 140 and 32 or 38) or (SIDE_W < 140 and 8 or 16),0,0),z=7,
+				text=tabName,font=Enum.Font.BuilderSansMedium,size=SIDE_W < 140 and 12 or 14,colorKey="sub",
+				sz=UDim2.new(1,0,1,0),pos=UDim2.new(0,(iconName and lucide) and (SIDE_W < 140 and 32 or 38) or (SIDE_W < 140 and 8 or 14),0,0),z=7,
 			})
 			nl.TextTruncate = Enum.TextTruncate.AtEnd
 
@@ -3005,7 +3015,7 @@ function VantixUI:CreateWindow(config)
 			if iconName and lucide then
 				iconImg = img(nb,{
 					name="Icon", img=getLucide(iconName, 18),
-					colorKey="sub", sz=UDim2.new(0,SIDE_W < 140 and 16 or 19,0,SIDE_W < 140 and 16 or 19), pos=UDim2.new(0,SIDE_W < 140 and 10 or 12,0.5,0), anchor=Vector2.new(0,0.5), z=7,
+					colorKey="sub", sz=UDim2.new(0,SIDE_W < 140 and 16 or 18,0,SIDE_W < 140 and 16 or 18), pos=UDim2.new(0,SIDE_W < 140 and 10 or 12,0.5,0), anchor=Vector2.new(0,0.5), z=7,
 				})
 			end
 
@@ -3900,7 +3910,7 @@ function VantixUI:CreateWindow(config)
 		t:Play()
 
 		pcall(function()
-			tw(outerGlow, {BackgroundTransparency = 1}, 0.15):Play()
+			tw(macShadow, {ImageTransparency = 1}, 0.15):Play()
 		end)
 
 		task.delay(0.25, function()
@@ -3913,10 +3923,11 @@ function VantixUI:CreateWindow(config)
 		if revealed then return end
 		revealed = true
 		if not userResized then win.Size = UDim2.new(0, WIN_W, 0, WIN_H) end
+		sidebar.Visible = true
+		sidebarDivider.Visible = true
 		titlebar.Visible = true
-		body.Visible = true
+		contentArea.Visible = true
 		cursorSink.Visible = true
-		pcall(function() tw(contentArea,{BackgroundTransparency=0},0.28):Play() end)
 		pcall(function()
 			for _,d in ipairs(loadLayer:GetDescendants()) do
 				if d:IsA("TextLabel") then tw(d,{TextTransparency=1},0.2):Play()
